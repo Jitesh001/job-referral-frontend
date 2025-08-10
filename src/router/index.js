@@ -48,14 +48,39 @@ router.beforeEach(async (to, from, next) => {
   const isLoggedIn = authStore.isAuthenticated;
 
   try {
+    // Preload user if logged in
+    if (isLoggedIn && !authStore.user) {
+      await authStore.fetchUserProfile();
+    }
+
+    // 0) Invalid/unmatched routes
+    const isUnmatched = to.matched.length === 0 || to.name === "NotFound";
+    if (isUnmatched) {
+      if (isLoggedIn) {
+        return next({
+          name: "feed",
+          params: { userUUID: authStore.user?.uuid },
+          query: { tabValue: 1 },
+        });
+      }
+      // Not logged in -> send to login with "next" so we could later route somewhere sane
+      return next({ name: "login", query: { next: to.fullPath } });
+    }
+
+    // 1) Logged in visiting /signup or /login -> go to feed
+    if (isLoggedIn && (to.path === "/signup" || to.name === "login")) {
+      return next({
+        name: "feed",
+        params: { userUUID: authStore.user?.uuid },
+        query: { tabValue: 1 },
+      });
+    }
+
+    // 2) Protected routes
     if (to.meta.requiresAuth) {
       if (isLoggedIn) {
-        if (!authStore.user) {
-          await authStore.fetchUserProfile();
-        }
         return next();
       }
-
       if (authStore.refreshToken) {
         try {
           await authStore.refreshAccessToken();
@@ -68,8 +93,10 @@ router.beforeEach(async (to, from, next) => {
       return next({ name: "login", query: { next: to.fullPath } });
     }
 
+    // 3) Public routes
     return next();
   } catch (err) {
+    console.error(err);
     return next({ name: "login", query: { next: to.fullPath } });
   }
 });

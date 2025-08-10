@@ -6,10 +6,12 @@ export const useAuthStore = defineStore("userAuth", () => {
   const error = ref(null);
 
   const isAuthenticated = computed(() => {
-    if (accessToken.value) {
+    if (!accessToken.value) return false;
+    try {
       return jwtDecode(accessToken.value).exp > Date.now() / 1000;
+    } catch {
+      return false;
     }
-    return false;
   });
 
   const userFullName = computed(() => {
@@ -17,19 +19,31 @@ export const useAuthStore = defineStore("userAuth", () => {
     return `${user.value.first_name} ${user.value.last_name}`;
   });
 
+  // const refreshAccessToken = async () => {
+  //   try {
+  //     const { status, data } = await post("/user/token/refresh/", {
+  //       refresh: refreshToken.value,
+  //     });
+  //     if (status === 200) {
+  //       accessToken.value = data.access;
+  //     } else {
+  //       await router.push({ name: "login" });
+  //     }
+  //   } catch (error) {
+  //     console.log(error);
+  //   }
+  // };
+
   const refreshAccessToken = async () => {
-    try {
-      const { status, data } = await post("/user/token/refresh/", {
-        refresh: refreshToken.value,
-      });
-      if (status === 200) {
-        accessToken.value = data.access;
-      } else {
-        await router.push({ name: "login" });
-      }
-    } catch (error) {
-      console.log(error);
+    const { status, data } = await post("/user/token/refresh/", {
+      refresh: refreshToken.value,
+    });
+    if (status === 200) {
+      accessToken.value = data.access;
+      return true;
     }
+    // throw to let the guard handle navigation
+    throw new Error("Refresh failed");
   };
 
   const register = async (payload) => {
